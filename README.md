@@ -44,7 +44,7 @@ GoProのファイルは GX\<サブシーケンス番号\>\<シーケンス番号
 
 # PARAMETERS
 
-## -LocalDestination \<folder-path\>
+## [ -LocalDestination \<folder-path\> ]
 
 動画ファイルをコピーするローカルフォルダを指定します。UNCパス形式（例 *\\\fileserver\\folder*）を設定することも可能です。
 このフォルダにコピーされたファイルは OneDrive へのアップロードの際のコピー元ファイルとして使用されます。
