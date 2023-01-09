@@ -46,7 +46,6 @@ class OneDrive {
         $binReader = $null
         $res = $null
         $totalStart = Get-Date
-        $success = $null
         $fileStream = [System.IO.FileStream]::New([System.IO.Path]::GetFullPath($file), [System.IO.FileMode]::Open)
         $binReader = [System.IO.BinaryReader]::New($fileStream)
         $pos = 0
@@ -84,7 +83,7 @@ class OneDrive {
                     $res = Invoke-RestMethod -Method Delete -Uri $session.uploadUrl -Headers @{Authoriaztion=$msal.CreateHeader() }
                     log ([OneDriveMessages]::Aborted)
                 }
-                $success = $null
+                $res = $null
                 break
             }
 
@@ -103,7 +102,7 @@ class OneDrive {
         #--- uploading loop ends
         logv "Upload final response: $($res)"
 
-        if ($success) {
+        if ($res) {
             $totalEnd = Get-Date
             $elapsed = $totalEnd - $totalStart
             log ([OneDriveMessages]::Completed -f $elapsed.ToString($this.elapsed_format),(toByteCountString $size/$elapsed.TotalSeconds))
@@ -117,7 +116,7 @@ class OneDrive {
         if ($fileStream) {
             $fileStream.Dispose()
         }
-        return $success
+        return $res
     }
 
     <#

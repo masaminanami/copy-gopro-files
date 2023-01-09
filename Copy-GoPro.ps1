@@ -216,7 +216,10 @@ class Main {
                 Rename-Item -Path $fp -NewName $file.newName -verbose:1
             }
             $copiedFile = Get-Item (Join-Path $destdirpath $file.newName)
-            $this.goproFiles[$findex] = [DirectAccessFile]::New($copiedFile)
+            $newFileObj = [DirectAccessFile]::New($copiedFile)
+            $newFileObj.altNames = $this.goproFiles[$findex].altNames
+            $newFileObj.newName = $this.goproFiles[$findex].newName
+            $this.goproFiles[$findex] = $newFileObj
         }
         return $true
     }
@@ -273,7 +276,9 @@ class Main {
             }
             log ([CopyGoProMessages]::Uploading -f $e.name,$e.filesize,$destdirpath)
             $res = $od.UploadFile($this.msal, $destdirpath, $e.GetFullpath(), $e.filesize)
-            if ($res) {
+
+            # rename when upload OK _and_ newName is set (e.g., directly uploaded from GoPro)
+            if ($res -and $e.newName) {
                 $od.RenameItem($this.msal, $res, $e.newName)
             }
             if ($cachedir) {
