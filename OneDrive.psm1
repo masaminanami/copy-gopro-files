@@ -93,7 +93,7 @@ class OneDrive {
             $pos += $buf.Length
             $retryCount = 0
 
-            log ([OneDriveMessages]::PutSuccess -f $elapsed.ToString($this.elapsed_format),(toByteCountString $buf.Length/$elapsed.TotalSeconds),(toByteCountString $size - $pos))
+            log ([OneDriveMessages]::PutSuccess -f $elapsed.ToString($this.elapsed_format),(toByteCountString ($buf.Length/$elapsed.TotalSeconds)),(toByteCountString ($size - $pos)))
             logv "Response=$res"
 
             $msal.RefreshToken()
@@ -105,7 +105,7 @@ class OneDrive {
         if ($res) {
             $totalEnd = Get-Date
             $elapsed = $totalEnd - $totalStart
-            log ([OneDriveMessages]::Completed -f $elapsed.ToString($this.elapsed_format),(toByteCountString $size/$elapsed.TotalSeconds))
+            log ([OneDriveMessages]::Completed -f $elapsed.ToString($this.elapsed_format),(toByteCountString ($size/$elapsed.TotalSeconds)))
         }
 
         #--- close the streams anyway

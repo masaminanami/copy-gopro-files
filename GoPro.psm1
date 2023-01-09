@@ -157,9 +157,9 @@ class GoProFile : FileInfo {
     }
 
     [long] GetFileSize() {
-        if ($this.sizeStr -match '(\d+)\s*MB') { return $matches[1] + 1MB }
-        elseif ($this.sizeStr -match '(\d+)\s*GB') { return $matches[1] + 1GB }
-        elseif ($this.sizeStr -match '\d+') { return $matches }
+        if ($this.sizeStr -match '([\d\.,]+)\s*MB') { return $matches[1] * 1MB }
+        elseif ($this.sizeStr -match '([\d\.,]+)\s*GB') { return $matches[1] * 1GB }
+        elseif ($this.sizeStr -match '[\d\.,]+') { return $matches }
         return 1
     }
 

@@ -50,7 +50,7 @@ function getLogFilePath() {
 }
 
 <#--- covert byte to MB, GB, TB ---#>
-function toByteCountString($s) {
+function toByteCountString([double]$s) {
     switch ($s) {
         {$_ -le 1GB} { return "$([Math]::Round($s/1MB, 2)) MB" }
         {$_ -le 1TB} { return "$([Math]::Round($s/1GB, 2)) GB" }
@@ -206,7 +206,8 @@ class Main {
             if (-not $fileExists) {
                 #--- here it's new!
                 if ($file.getFileSize() -ge ($diskfree = $this.getFree($destdirpath))) {
-                    log ([CopyGoProMessages]::NoDiskFree -f "$([math]::rouond($diskfree/1GB, 2)) GB")
+                    logv "file too large: $($file.getFileFize()) <-> diskfree: $diskfree"
+                    log ([CopyGoProMessages]::NoDiskFree -f "$([math]::Round($diskfree/1GB, 2)) GB")
                     return $false
                 }
 
