@@ -213,8 +213,10 @@ class Main {
 
                 log ([CopyGoProMessages]::Copying -f $file.newName)
                 $file.CopyTo($destdirpath)
-                $fp = Join-Path $destdirpath $file.Name
-                Rename-Item -Path $fp -NewName $file.newName -verbose:1
+                if ($file.renameRequired) {
+                    $fp = Join-Path $destdirpath $file.Name
+                    Rename-Item -Path $fp -NewName $file.newName -verbose:1
+                }
             }
             $copiedFile = Get-Item (Join-Path $destdirpath $file.newName)
             $newFileObj = [DirectAccessFile]::New($copiedFile)
