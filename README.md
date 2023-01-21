@@ -3,14 +3,27 @@
 PCに接続したGoProのMP4ファイルをローカルフォルダ（ローカルネットワーク上のフォルダ含む）と OneDrive にコピーします。
 GoProのファイルは GX<サブシーケンスNo><シーケンスNo>.MP4 となっており、管理しにくいため、<日付>-GX<シーケンスNo><サブシーケンスNo>.MP4 形式の名前に変更します。
 
-OneDrive は現状 OneDrive for Business のみの対応です。（OneDrive Personal への ~~アップロード方法~~ アプリ登録方法がわからない！）
+OneDrive は個人用、法人用（OneDrive for Business) の両方に対応しています。
 
 # Installation
 
 1. アプリをダウンロード
-1. OneDrive へのアップロードを行う場合は
+1. OneDrive 個人用へのアップロードを行う場合
     1. [アプリの登録](https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app)を参考にアプリを登録
-    1. AppConfig.json ファイル内の ```$AppClientId = "xxxx"``` の xxx 部分を登録したアプリのクライアントIDに変更
+        1. この時に「個人用アカウントからのアプリケーション」タブを選択した状態で「＋新規登録」をクリックして登録を開始する必要があるようです
+        1. さらに「このアプリケーションをどこに登録しますか？」で「個人アカウントのみに紐付ける」と進まないと期待する場所に登録されないようです。ここはまりポイント
+    1. ダウンロードしたファイルの中の AppConfig sample.json を AppConfig.json としてコピーする
+    1. AppConfig.json ファイル内の ```AppClientId = "xxxx"``` の xxx 部分を登録したアプリのクライアントIDに変更
+
+1. OneDrive for Business へのアップロードを行う場合
+    1. [アプリの登録](https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app)を参考にアプリを登録。管理者権限が必要です。
+        1. アプリの登録の際にはシングルテナントとして登録するのが良いでしょう
+    1. ダウンロードしたファイルの中の AppConfig sample.json を AppConfig.json としてコピーする
+    1. AppConfig.json ファイルを編集
+        1. ```AppClientIdForBusiness = "xxxx"``` の xxx 部分を登録したアプリのクライアントIDに変更
+        1. ```TenantId = "xxx"``` の xxx 部分を自組織のテナントIDに変更
+
+OneDrive個人用もOneDrive for Business も RedirectUri は https://localhost などがよいでしょう。
 
 やっぱり無理ゲーですかね。
 
@@ -34,9 +47,9 @@ PCに接続されている HERO11 Back の MP4ファイルを _fileserver\\Video
 
 -LocalDestination で指定したフォルダ配下に動画ファイルの撮影日時をもとに "*yyyy\\mm\\yyyymmdd コメント*" フォルダを作成します。
 
-## OneDrive
+## OneDrive / OneDrive for Business
 
-実行したユーザの OneDrive 上のドキュメントフォルダ以下の -OneDriveDestination で指定したフォルダ配下に動画ファイルの撮影日時をもとに "*yyyy\\mm\\yyyymmdd コメント*" フォルダを作成します。
+実行したユーザの OneDrive 上のドキュメントフォルダ以下の -OneDriveDestination または -OneDriveForBusinessDestination で指定したフォルダ配下に動画ファイルの撮影日時をもとに "*yyyy\\mm\\yyyymmdd コメント*" フォルダを作成します。
 
 ## ファイル名
 
@@ -51,8 +64,21 @@ GoProのファイルは GX\<サブシーケンス番号\>\<シーケンス番号
 
 ## [ -OneDriveDestination \<folder\> ]
 
+別名: OD
+
 OneDrive 上のフォルダを指定します。ドキュメントフォルダ以下のパスを指定します。
 省略した場合、OneDrive へのアップロードは行われません。
+
+注意！ OneDrive個人用に対応したことにより、-OneDriveDestination パラメータは OneDrive個人用に変更されました。
+
+## [ -OneDriveForBusinessDestination \<folder\> ]
+
+別名: ODB
+
+OneDrive for Business 上のフォルダを指定します。ドキュメントフォルダ以下のパスを指定します。
+省略した場合、OneDrive for Business へのアップロードは行われません。
+
+注意！ OneDrive個人用に対応したことにより、OneDrive for Business上へのアップロード指定はこちらを使うように変更されました。
 
 ## [ -Remark \<コメント\> ]
 
@@ -88,5 +114,4 @@ OneDrive にアップロードする際のバッファサイズを指定しま�
 |Hero11 Black|HERO11 Black|
 
 まんまじゃん。自動検出するようにしたので -Name オプションはもう要らないかも。
-
 
