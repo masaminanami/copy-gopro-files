@@ -22,10 +22,12 @@ class OneDriveBase {
 
     Init() {
         $this.bufferSize = 320 * 1024 * 100 # do not change "320*1024" as it is SPO/ODB requirement
-        $this.itemCache = @{}
         $this.elapsed_format = 'h\:mm\:ss\.fff'
         $this.msal = [MSALWrapper]::New()
+        $this.ClearCache()
     }
+
+    ClearCache() { $this.itemCache = @{} }
 
     [bool] SignIn($clientId, $redirectUri, $scope, $tenantId) {
         return $this.msal.SignIn($clientId, $redirectUri, $scope, $tenantId)
@@ -110,6 +112,8 @@ class OneDriveBase {
             $totalEnd = Get-Date
             $elapsed = $totalEnd - $totalStart
             log ([OneDriveMessages]::Completed -f $elapsed.ToString($this.elapsed_format),(toByteCountString ($size/$elapsed.TotalSeconds)))
+            $res = $res |ConvertFrom-Json -AsHashtable
+            $this.ClearCache()
         }
 
         #--- close the streams anyway
@@ -133,6 +137,7 @@ class OneDriveBase {
         $res = Invoke-WebRequest -Method Patch -Uri $uri -Headers @{ Authorization=$this.msal.CreateHeader(); "Content-Type"="application/json" } -Body ($body |ConvertTo-Json -Depth 10 -Compress)
 
         logv $res
+        $this.ClearCache()
         return $res.StatusCode -eq 200
     }
 
@@ -166,9 +171,9 @@ class OneDriveBase {
                 logv "Subfolder found: $($dir.Name)"
                 $parent = $dir
             } elseif ($fCreate) {
-                log "Creating folder |$subf| under |$($parent.Name)|"
                 $res = $this.apipost("/drive/items/$($parent.Id)/children", @{ name=$subf; folder=@{}; '@microsoft.graph.conflictBehavior'="fail"; })
                 if ($res) {
+                    $this.ClearCache()
                     log ([OneDriveMessages]::FolderCreated -f $res.Name)
                     $parent = $res
                 }

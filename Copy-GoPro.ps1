@@ -275,8 +275,6 @@ class Main {
                 log ([CopyGoProMessages]::SubFolderCreate -f $dirName,$parent.Name)
             }
             $dir = $od.SetOrCreateLocation($dirName, $parent, $true)
-            #debug
-            log "FolderCreated: $($dir) Name=$($dir.Name), ID=$($dir.ID)"
             $destdirpath = Join-Path $destdirpath $dirName
 
             if ($this.fileExists($od, $dir, $e)) { continue }
@@ -288,11 +286,6 @@ class Main {
             }
             log ([CopyGoProMessages]::Uploading -f $e.name,$e.filesize,$destdirpath)
             $res = $od.UploadFile($destdirpath, $e.GetFullpath(), $e.filesize)
-
-            #---debug
-            log "res=$res"
-            log "count=$($res.value)"
-            log "name=$($res.name) / $($res.value.name)"
 
             # rename when upload OK _and_ newName is set (e.g., directly uploaded from GoPro)
             if ($res -and $e.newName) {
