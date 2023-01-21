@@ -210,7 +210,7 @@ class OneDriveBase {
         logv "OneDrive.apipost: $rUrl body=$($bodyRaw)"
         $hdr = @{ Authorization = $this.msal.CreateHeader() }
         if ($optHeaders) {
-            $optHeaders.Keys |%{ $hdr.$_ = $optHeaders.$_; log "apipost: Adding $k = $($optHeaders.$k)" }
+            $optHeaders.Keys |%{ $hdr.$_ = $optHeaders.$_; logv "apipost: Adding $k = $($optHeaders.$k)" }
         }
         $res = Invoke-RestMethod -Method Post -Uri $rUrl -Headers $hdr  -Body $bodyRaw -ContentType "application/json; charset=utf-8"
         return $res
@@ -232,10 +232,6 @@ class OneDrive : OneDriveBase {
         $session = $this.apipost($uri, $body)
         logv "uploadFile: url=$($session.uploadUrl) nextExpectedRanges=$($session.nextExpectedRanges)"
         return $session
-
-        <# sample:
-         Invoke-RestMethod -Method post -Headers @{Authorization=$token.CreateAuthorizationHeader()} -Uri https://api.onedrive.com/v1.0/drive/items/29B4AD00651BEB09!12563:/gx100.mp3:/createUploadSession -Body @{name="gx100.mp3"; filesize=100}
-         #>
     }
 }
 
