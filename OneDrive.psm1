@@ -106,6 +106,7 @@ class OneDrive {
             $totalEnd = Get-Date
             $elapsed = $totalEnd - $totalStart
             log ([OneDriveMessages]::Completed -f $elapsed.ToString($this.elapsed_format),(toByteCountString ($size/$elapsed.TotalSeconds)))
+            $res = $res |ConvertFrom-Json -AsHashtable
         }
 
         #--- close the streams anyway
