@@ -39,7 +39,7 @@ class GoProDrive {
 }
 
 <#
- # Media Transfer Protocol classes: MTP, MtpFolder, MtpFile
+ # Media Transfer Protocol class
  #>
 class GoProDevice : GoProDrive {
     [int]$indexName;
@@ -165,7 +165,7 @@ class GoProFile : FileInfo {
 
     [bool] CopyTo($folder) {
         log ([GoProMessages]::Copying -f $this.Name)
-        logv "copyto $($this.name) -> $folder   "
+        logv "copyto $($this.name) -> $folder"
         $folderObj = (New-Object -ComObject Shell.Application).NameSpace($folder)
         $folderObj.CopyHere($this.source)
         return $true
@@ -222,110 +222,3 @@ class GoProMemory : GoProDrive {
         return $fileFound
     }
 }
-
-#---- Obsolate
-class MtpFolder {
-    $name
-    $devName
-    $folderItem;
-    $isInitDone;
-    $indexWriteTime;
-    $indexName;
-    $indexSize;
-    $fullPath;
-
-    MtpFolder($folder, $dname) {
-        $this.folderItem = $folder
-        $this.name = $folder.Name
-        $this.devName = $dname
-        $this.isInitDone = $false
-        $this.indexName = $this.indexSize = $this.indexWriteTime = -1
-        $this.makeFullPath()
-    }
-
-    makeFullPath() {
-        $this.fullPath = ""
-        $dir = $this.folderItem.GetFolder
-        while ($dir.ParentFolder) {
-            $this.fullPath = Join-Path $dir.Title $this.fullPath
-            $dir = $dir.ParentFolder
-        }
-    }
-
-    [Object] GetFiles() {
-        if (-not $this.isInitDone) { $this.Init() }
-        $rc = @()
-        foreach ($e in $this.folderItem.GetFolder.Items()) {
-            $rc += (,[MtpFile]::New($e, $this))
-        }
-        return $rc
-    }
-
-    [object] getItemName($item) { return $this.folderItem.GetFolder.GetDetailsOf($item.fileItem, $this.indexName) }
-    [object] getItemSize($item) { return $this.folderItem.GetFolder.GetDetailsOf($item.fileItem, $this.indexSize) }
-    [object] getItemWriteTime($item) { return Get-Date $this.folderItem.GetFolder.GetDetailsOf($item.fileItem, $this.indexWriteTime) }
-
-    [object] getItemFullPath($item) { return Join-Path $this.fullPath $item.Name }
-
-}
-
- class MtpFile {
-    $parentFolder; # no access if device is detached
-    $fileItem; # no access if device is detached
-    $name
-    $altNames;
-    $newName;
-    $filesize;
-    $writeTime;
-    $fullpath;
-    $yyyy; $mm; $dd;
-
-    MtpFile($file, $dir) {
-        $this.parentFolder = $dir
-        $this.fileItem = $file
-        $this.name = $file.Name
-
-        $this.setNames()
-        $this.setFileInfo()
-
-        #$this.show()
-    }
-
-    setNames() {
-        $this.altNames = @($this.name)
-        $basename = $this.name
-        if ($this.name -match "GX(\d\d)(\d\d\d\d).MP4") {
-            $basename = "GX$($matches[2])-$($matches[1]).MP4"
-            $this.altNames += $basename
-        }
-        $date = $this.parentFolder.getItemWriteTime($this)
-        $datestr = (Get-Date $date).toString('yyyyMMdd-HHmm')
-        $this.altNames += "$datestr.$($this.name)"
-
-        $this.newName = "$datestr.$($basename)"
-        $this.altNames += $this.newName
-    }
-
-    setFileInfo() {
-        $this.filesize = $this.parentFolder.getItemSize($this)
-        $this.writeTime = $this.parentFolder.getItemWriteTime($this)
-        $this.fullpath = $this.parentFolder.getItemFullpath($this)
-
-        $this.yyyy = $this.writeTime.ToString('yyyy')
-        $this.mm = $this.writeTime.ToString('MM')
-        $this.dd = $this.writeTime.ToString('dd')
-    }
-
-    CopyTo($folderObj) {
-        log ([GoProMessages]::Copying -f $this.Name)
-        $folderObj.CopyHere($this.fileItem)
-    }
-
-    show() {
-        log "Name $($this.name) Fullpath=$($this.fullpath) Size=$($this.filesize) WriteTime=$($this.writeTime)"
-    }
- }
-
- class FileOnMemory {
-
- }

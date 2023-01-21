@@ -4,42 +4,48 @@
 using module .\OneDrive.resources.ja-jp.psm1
 using module .\MsalWrapper.psm1
 
-class OneDrive {
+
+class OneDriveBase {
+    $msal;
     $baseUri;
     $bufferSize;
     $itemCache;
     $elapsed_format
     static $MaxRetryCount = 3
 
-    OneDrive() { $this.init() }
-    OneDrive($buffUnit) {
+    OneDriveBase() { $this.init() }
+    OneDriveBase($buffUnit) {
         $this.init()
         $this.bufferSize = 320 * 1024 * $buffUnit
         log ([OneDriveMessages]::BufferSizeChanged -f $buffUnit)
     }
 
     Init() {
-        $this.baseUri = 'https://graph.microsoft.com/v1.0'
         $this.bufferSize = 320 * 1024 * 100 # do not change "320*1024" as it is SPO/ODB requirement
-        $this.itemCache = @{}
         $this.elapsed_format = 'h\:mm\:ss\.fff'
+        $this.msal = [MSALWrapper]::New()
+        $this.ClearCache()
+    }
+
+    ClearCache() { $this.itemCache = @{} }
+
+    [bool] SignIn($clientId, $redirectUri, $scope, $tenantId) {
+        return $this.msal.SignIn($clientId, $redirectUri, $scope, $tenantId)
     }
 
     <#
     # Upload file (large)
     #>
-    [Object] UploadFile($msal, $folderpath, $file) {
+    [Object] getUploadSession($folderpath, $file, $size) { throw "ERROR! subclass must implement getUploadUrl()"}
+
+    [Object] UploadFile($folderpath, $file) {
         $fd = Get-Item -path $file
-        return $this.UploadFile($msal, $folderpath, $file, $fd.Length)
+        return $this.UploadFile($folderpath, $file, $fd.Length)
     }
 
-    [Object] UploadFile($msal, $folderpath, $file, $size) {
+    [Object] UploadFile($folderpath, $file, $size) {
         $folderpath = $folderpath -replace '^\\','' -replace '\\$',''
-        $basename = Split-Path -Leaf $file
-        $uri = "/me/drive/root:/$folderpath/$($basename):/createUploadSession"
-        $body = @{ "@microsoft.graph.conflictBehavior"="fail"; name=$basename; filesize=$size}
-        $session = $this.apipost($msal, $uri, $body)
-        logv "uploadFile: url=$($session.uploadUrl) nextExpectedRanges=$($session.nextExpectedRanges)"
+        $session = $this.getUploadSession($folderpath, $file, $size)
 
         $this.bufferSize
         $fileStream = $null
@@ -54,7 +60,7 @@ class OneDrive {
         while ($buf = $binReader.ReadBytes($this.bufferSize)) {
             log ([OneDriveMessages]::ReadData -f (toByteCountString $buf.Length),(toByteCountString $pos))
             $hdr = @{}
-            $hdr.Authorization = $msal.CreateHeader()
+            $hdr.Authorization = $this.msal.CreateHeader()
             $range = "bytes $pos-$($pos+$buf.Length-1)/$size"
             $hdr.'Content-Range' = $range;
             logv "OneDrive.Upload: Range=$range"
@@ -80,7 +86,7 @@ class OneDrive {
                 }
                 #--- error is not recoverable
                 if ($session) {
-                    $res = Invoke-RestMethod -Method Delete -Uri $session.uploadUrl -Headers @{Authoriaztion=$msal.CreateHeader() }
+                    $res = Invoke-RestMethod -Method Delete -Uri $session.uploadUrl -Headers @{Authoriaztion=$this.msal.CreateHeader() }
                     log ([OneDriveMessages]::Aborted)
                 }
                 $res = $null
@@ -96,7 +102,7 @@ class OneDrive {
             log ([OneDriveMessages]::PutSuccess -f $elapsed.ToString($this.elapsed_format),(toByteCountString ($buf.Length/$elapsed.TotalSeconds)),(toByteCountString ($size - $pos)))
             logv "Response=$res"
 
-            $msal.RefreshToken()
+            $this.msal.RefreshToken()
         }
 
         #--- uploading loop ends
@@ -107,6 +113,7 @@ class OneDrive {
             $elapsed = $totalEnd - $totalStart
             log ([OneDriveMessages]::Completed -f $elapsed.ToString($this.elapsed_format),(toByteCountString ($size/$elapsed.TotalSeconds)))
             $res = $res |ConvertFrom-Json -AsHashtable
+            $this.ClearCache()
         }
 
         #--- close the streams anyway
@@ -123,37 +130,38 @@ class OneDrive {
     <#
      # Rename Item
      #>
-    [object] RenameItem($msal, $file, $newName) {
-        $uri = $this.baseUri + '/me/drive/items/' + $file.id
+    [object] RenameItem($file, $newName) {
+        $uri = $this.baseUri + '/drive/items/' + $file.id
         $body = @{ name = $newName }
         logv "OneDrive.Rename: $uri Body=$($body |Convertto-json)"
-        $res = Invoke-WebRequest -Method Patch -Uri $uri -Headers @{ Authorization=$msal.CreateHeader(); "Content-Type"="application/json" } -Body ($body |ConvertTo-Json -Depth 10 -Compress)
+        $res = Invoke-WebRequest -Method Patch -Uri $uri -Headers @{ Authorization=$this.msal.CreateHeader(); "Content-Type"="application/json" } -Body ($body |ConvertTo-Json -Depth 10 -Compress)
 
         logv $res
+        $this.ClearCache()
         return $res.StatusCode -eq 200
     }
 
     <#
      # GetChildItem
      #>
-    [object] GetChildItem($msal, $parent) {
+    [object] GetChildItem($parent) {
         logv "GetChildItem: $($parent.Name) type=$($parent.Gettype()) parent=$parent"
-        return $this.apiget($msal, "/me/drive/items/$($parent.Id)/children")
+        return $this.apiget("/drive/items/$($parent.Id)/children")
     }
 
     <#
     #--- ChDir
     #>
-    [Object] SetOrCreateLocation($msal, $path, [bool]$fCreate) {
-        $root = $this.apiget($msal, '/me/drive/root')
+    [Object] SetOrCreateLocation($path, [bool]$fCreate) {
+        $root = $this.apiget('/drive/root')
         logv "ROOT=$root"
-        return $this.SetOrCreateLocation($msal, $path, $root, $fCreate)
+        return $this.SetOrCreateLocation($path, $root, $fCreate)
     }
 
-    [Object] SetOrCreateLocation($msal, $path, $parent, [bool]$fCreate) {
+    [Object] SetOrCreateLocation($path, $parent, [bool]$fCreate) {
         $path = $path -replace '^\\',''
         foreach ($subf in $path -split('\\')) {
-            $children = $this.GetChildItem($msal, $parent)
+            $children = $this.GetChildItem($parent)
 
             #log "DEBUG> $(($children.value|%{ $_.Name }) -join(', '))"
 
@@ -163,8 +171,9 @@ class OneDrive {
                 logv "Subfolder found: $($dir.Name)"
                 $parent = $dir
             } elseif ($fCreate) {
-                $res = $this.apipost($msal, "/me/drive/items/$($parent.Id)/children", @{ name=$subf; folder=@{}; '@microsoft.graph.conflictBehavior'="fail"; })
+                $res = $this.apipost("/drive/items/$($parent.Id)/children", @{ name=$subf; folder=@{}; '@microsoft.graph.conflictBehavior'="fail"; })
                 if ($res) {
+                    $this.ClearCache()
                     log ([OneDriveMessages]::FolderCreated -f $res.Name)
                     $parent = $res
                 }
@@ -179,10 +188,10 @@ class OneDrive {
     <#
      # API Get
      #>
-    [Object] apiget($msal, $uri) {
+    [Object] apiget($uri) {
         if ($this.itemCache.Contains($uri)) { return $this.itemCache.$uri }
         logv "OneDrive.apiget: $uri"
-        $res =  Invoke-RestMethod -Method Get -Uri ($this.baseUri + $uri) -Headers @{ Authorization=$msal.CreateHeader() }
+        $res =  Invoke-RestMethod -Method Get -Uri ($this.baseUri + $uri) -Headers @{ Authorization=$this.msal.CreateHeader() }
         $this.itemCache.$uri = $res
         return $res
     }
@@ -190,20 +199,61 @@ class OneDrive {
     <#
      # API Post
      #>
-    [Object] apipost($msal, $uri, $body) {
+    [Object] apipost($uri, $body) {
         $bstr = $body |ConvertTo-Json -Depth 10 -Compress
         logv "apipost: body=$bstr"
-        return $this.apipost($msal, $uri, $bstr, $null)
+        return $this.apipost($uri, $bstr, $null)
     }
 
-    [Object] apipost($msal, $uri, $bodyRaw, $optHeaders) {
+    [Object] apipost($uri, $bodyRaw, $optHeaders) {
         $rUrl = $uri -match '^http' ? $uri : $this.baseUri + $uri
-        logv "OneDrive.apipost: $rUrl body.size=$($bodyRaw.Length)"
-        $hdr = @{ Authorization = $msal.CreateHeader() }
+        logv "OneDrive.apipost: $rUrl body=$($bodyRaw)"
+        $hdr = @{ Authorization = $this.msal.CreateHeader() }
         if ($optHeaders) {
             $optHeaders.Keys |%{ $hdr.$_ = $optHeaders.$_; log "apipost: Adding $k = $($optHeaders.$k)" }
         }
         $res = Invoke-RestMethod -Method Post -Uri $rUrl -Headers $hdr  -Body $bodyRaw -ContentType "application/json; charset=utf-8"
         return $res
     }
+}
+
+<# for Personal #>
+class OneDrive : OneDriveBase {
+    OneDrive() : Base() {}
+    OneDrive($buffUnit) : Base($buffUnit) {
+        $this.baseUri = 'https://api.onedrive.com/v1.0'
+    }
+
+    [Object] getUploadSession($folderpath, $file, $size) {
+        $folderObj = $this.SetOrCreateLocation($folderpath, $false)
+        $basename = Split-Path -Leaf $file
+        $uri = "/drive/items/$($folderObj.id):/$($basename):/createUploadSession"
+        $body = @{ "@microsoft.graph.conflictBehavior"="fail" }
+        $session = $this.apipost($uri, $body)
+        logv "uploadFile: url=$($session.uploadUrl) nextExpectedRanges=$($session.nextExpectedRanges)"
+        return $session
+
+        <# sample:
+         Invoke-RestMethod -Method post -Headers @{Authorization=$token.CreateAuthorizationHeader()} -Uri https://api.onedrive.com/v1.0/drive/items/29B4AD00651BEB09!12563:/gx100.mp3:/createUploadSession -Body @{name="gx100.mp3"; filesize=100}
+         #>
+    }
+}
+
+<# for Business #>
+class OneDriveBusiness : OneDriveBase {
+    OneDriveBusiness() : Base() {}
+    OneDriveBusiness($buffUnit) : Base($buffUnit) {
+        $this.baseUri = 'https://graph.microsoft.com/v1.0/me'
+    }
+
+    [Object] getUploadSession($folderpath, $file, $size) {
+        $basename = Split-Path -Leaf $file
+
+        $uri = "/drive/root:/$folderpath/$($basename):/createUploadSession"
+        $body = @{ "@microsoft.graph.conflictBehavior"="fail"; name=$basename; filesize=$size}
+        $session = $this.apipost($uri, $body)
+        logv "uploadFile: url=$($session.uploadUrl) nextExpectedRanges=$($session.nextExpectedRanges)"
+        return $session
+    }
+
 }

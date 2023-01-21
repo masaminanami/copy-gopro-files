@@ -49,15 +49,17 @@ class DirectAccessFile : FileInfo {
     DirectAccessFile($item) : base($item, $item.Name, $item.LastWriteTime) {
         $this.filesize = $item.Length
         $this.sizestr = toByteCountString $item.Length
-        $this.renameRequired = $true
+        $this.renameRequired = $false
         $this.hasDirectAccess = $true
     }
 
     [bool] CopyTo($destdir) {
-        $destfp = Join-Path $destdir ($this.renameRequired ? $this.newName : $this.name)
+        $destfp = Join-Path $destdir $this.newName
         Copy-Item -LiteralPath $this.source.Fullname -Destination $destfp -verbose:1
         return $true
     }
 
     [string] GetFullPath() { return $this.source.Fullname }
+
+    [long] GetFileSize() { return $this.filesize }
 }
