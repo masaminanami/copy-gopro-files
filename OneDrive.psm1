@@ -4,21 +4,6 @@
 using module .\OneDrive.resources.ja-jp.psm1
 using module .\MsalWrapper.psm1
 
-<# for Personal #>
-class OneDrive : OneDriveBase {
-    OneDrive() : Base() {}
-    OneDrive($buffUnit) : Base($buffUnit) {
-        $this.baseUri = 'https://api.onedrive.com/v1.0'
-    }
-}
-
-<# for Business #>
-class OneDriveBusiness : OneDriveBase {
-    OneDriveBusiness() : Base() {}
-    OneDriveBusiness($buffUnit) : Base($buffUnit) {
-        $this.baseUri = 'https://graph.microsoft.com/v1.0/me'
-    }
-}
 
 class OneDriveBase {
     $baseUri;
@@ -43,6 +28,8 @@ class OneDriveBase {
     <#
     # Upload file (large)
     #>
+    [Object] getUploadSession($msal, $folderpath, $file, $size) { throw "ERROR! subclass must implement getUploadUrl()"}
+
     [Object] UploadFile($msal, $folderpath, $file) {
         $fd = Get-Item -path $file
         return $this.UploadFile($msal, $folderpath, $file, $fd.Length)
@@ -50,11 +37,7 @@ class OneDriveBase {
 
     [Object] UploadFile($msal, $folderpath, $file, $size) {
         $folderpath = $folderpath -replace '^\\','' -replace '\\$',''
-        $basename = Split-Path -Leaf $file
-        $uri = "drive/root:/$folderpath/$($basename):/createUploadSession"
-        $body = @{ "@microsoft.graph.conflictBehavior"="fail"; name=$basename; filesize=$size}
-        $session = $this.apipost($msal, $uri, $body)
-        logv "uploadFile: url=$($session.uploadUrl) nextExpectedRanges=$($session.nextExpectedRanges)"
+        $session = $this.getUploadSession($msal, $folderpath, $file, $size)
 
         $this.bufferSize
         $fileStream = $null
@@ -212,7 +195,7 @@ class OneDriveBase {
 
     [Object] apipost($msal, $uri, $bodyRaw, $optHeaders) {
         $rUrl = $uri -match '^http' ? $uri : $this.baseUri + $uri
-        logv "OneDrive.apipost: $rUrl body.size=$($bodyRaw.Length)"
+        logv "OneDrive.apipost: $rUrl body=$($bodyRaw)"
         $hdr = @{ Authorization = $msal.CreateHeader() }
         if ($optHeaders) {
             $optHeaders.Keys |%{ $hdr.$_ = $optHeaders.$_; log "apipost: Adding $k = $($optHeaders.$k)" }
@@ -220,4 +203,45 @@ class OneDriveBase {
         $res = Invoke-RestMethod -Method Post -Uri $rUrl -Headers $hdr  -Body $bodyRaw -ContentType "application/json; charset=utf-8"
         return $res
     }
+}
+
+<# for Personal #>
+class OneDrive : OneDriveBase {
+    OneDrive() : Base() {}
+    OneDrive($buffUnit) : Base($buffUnit) {
+        $this.baseUri = 'https://api.onedrive.com/v1.0'
+    }
+
+    [Object] getUploadSession($msal, $folderpath, $file, $size) {
+        $folderObj = $this.SetOrCreateLocation($msal, $folderpath, $false)
+        $basename = Split-Path -Leaf $file
+        $uri = "/drive/items/$($folderObj.id):/$($basename):/createUploadSession"
+        $body = @{ "@microsoft.graph.conflictBehavior"="fail" }
+        $session = $this.apipost($msal, $uri, $body)
+        logv "uploadFile: url=$($session.uploadUrl) nextExpectedRanges=$($session.nextExpectedRanges)"
+        return $session
+
+        <# sample:
+         Invoke-RestMethod -Method post -Headers @{Authorization=$token.CreateAuthorizationHeader()} -Uri https://api.onedrive.com/v1.0/drive/items/29B4AD00651BEB09!12563:/gx100.mp3:/createUploadSession -Body @{name="gx100.mp3"; filesize=100}
+         #>
+    }
+}
+
+<# for Business #>
+class OneDriveBusiness : OneDriveBase {
+    OneDriveBusiness() : Base() {}
+    OneDriveBusiness($buffUnit) : Base($buffUnit) {
+        $this.baseUri = 'https://graph.microsoft.com/v1.0/me'
+    }
+
+    [Object] getUploadSession($msal, $folderpath, $file, $size) {
+        $basename = Split-Path -Leaf $file
+
+        $uri = "/drive/root:/$folderpath/$($basename):/createUploadSession"
+        $body = @{ "@microsoft.graph.conflictBehavior"="fail"; name=$basename; filesize=$size}
+        $session = $this.apipost($msal, $uri, $body)
+        logv "uploadFile: url=$($session.uploadUrl) nextExpectedRanges=$($session.nextExpectedRanges)"
+        return $session
+    }
+
 }
