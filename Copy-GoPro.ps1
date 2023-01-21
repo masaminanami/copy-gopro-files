@@ -5,7 +5,6 @@ using module .\lib\Config.psm1
 using module .\GoPro.psm1
 using module .\OneDrive.psm1
 using module .\Copy-Gopro.resources.ja-jp.psm1
-using module .\MsalWrapper.psm1
 using module .\FileInfo.psm1
 
 param(
@@ -14,6 +13,8 @@ param(
 [string]$LocalDestination,
 [Alias('ODDest','OneDrive','OD')]
 [string]$OneDriveDestination,
+[Alias('ODB', 'ODFB', 'OneDriveBusiness')]
+[string]$OneDriveForBusinessDestination,
 [string]$Remark = "特別な1日",
 [string]$Date = $null,
 [string]$Cache,
@@ -30,8 +31,10 @@ $ErrorActionPreference = "stop"
 $script:GoProDevice # initialized by AppConfig.json
 $script:GoProDrive # initialized by AppConfig.json
 $script:AppClientId # initialized by AppConfig.json
-$script:TenantId # initialized by AppConfig.json
 $script:AppRedirectUri # initialized by AppConfig.json
+$script:AppClientIdForBusiness # initialized by AppConfig.json
+$script:AppRedirectUriForBusiness # initialized by AppConfig.json
+$script:TenantId # initialized by AppConfig.json
 
 $script:ScriptRoot = $MyInvocation.PSScriptRoot ? $MyInvocation.PSScriptRoot : ($MyInvocation.InvocationName -match '\.ps1$' ? (Split-Path -Parent $MyInvocation.InvocationName) : (Get-Location).Path)
 
@@ -65,10 +68,11 @@ return;
 
 class Main {
     $goproFiles;
-    $msal;
+    $ODProviders;
 
     Main() {
         $this.goproFiles = @()
+        $this.ODProviders = @()
     }
 
     Run() {
@@ -79,7 +83,20 @@ class Main {
         if (-not $this.goproFiles) { return }
 
         #--- sign in to OD/ODB if specified
-        if ($this.msal -and -not $this.OneDriveSignIn()) { return }
+        if ($script:OneDriveDestination) {
+            #--- OneDrive Personal
+            $p = [OneDrive]::New($script:BufferSize)
+            log ([CopyGoProMessages]::OneDriveSignIn)
+            if (-not $p.SignIn($script:AppClientId, $script:AppRedirectUri, "onedrive.readwrite", "consumers")) { return }
+            $this.ODProviders += @{Provider=$p; Destination=$script:OneDriveDestination; }
+        }
+        if ($script:OneDriveForBusinessDestination) {
+            #--- OneDrive For Business
+            $p = [OneDriveBusiness]::New($script:BufferSize)
+            log ([CopyGoProMessages]::OneDriveSignIn)
+            if (-not $p.SignIn($script:AppClientIdForBusiness, $script:AppRedirectUriForBusiness, "Files.ReadWrite.All", $script:TenantId)) { return }
+            $this.ODProviders += @{Provider=$p; Destination=$script:OneDriveForBusinessDestination; }
+        }
 
         if ($script:LocalDestination) {
             foreach ($dest in $script:LocalDestination -split(',')) {
@@ -89,10 +106,10 @@ class Main {
             }
         }
 
-        if ($this.msal) {
-            $dest = $script:OneDriveDestination
+        foreach ($pp in $this.ODProviders) {
+            $dest = $pp.Destination
             log ([CopyGoProMessages]::CopyingTo -f $dest)
-            $this.CopyToOneDrive($dest, $script:Cache)
+            $this.CopyToOneDrive($pp, $script:Cache)
         }
 
         log ([CopyGoProMessages]::AllDone)
@@ -118,17 +135,11 @@ class Main {
             }
         }
 
-        if (-not $script:OneDriveDestination) {
-            log ([CopyGoProMessages]::OneDriveDestinationNotSpecified)
-        } else {
-            $this.msal = [MSALWrapper]::New()
-        }
-        return $true
-
         if (-not $script:LocalDestination -and -not $script:OneDriveDestination) {
             log ([CopyGoProMessages]::LocalDestinationNotSpecified)
             return $false
         }
+        return $true
     }
 
     getGoProFiles($devName, $devSpec, $drvSpec) {
@@ -227,12 +238,8 @@ class Main {
         return $true
     }
 
-    [bool] OneDriveSignIn() {
-        log ([CopyGoProMessages]::OneDriveSignIn)
-        return $this.msal.SignIn($script:AppClientId, $script:AppRedirectUri, 'Files.ReadWrite.All', $script:TenantId)
-    }
 
-    copyToOneDrive($rootFolder, $cachedir) {
+    copyToOneDrive($pInfo, $cachedir) {
         # check if source file is not MTP
         $files = $this.goproFiles |?{ -not $_.hasDirectAccess }
         if ($files) {
@@ -240,9 +247,9 @@ class Main {
             return
         }
 
-        $od = [OneDrive]::New($script:BufferSize)
-        if (-not $od.SetOrCreateLocation($this.msal, $rootFolder, $false)) {
-            log ([CopyGoProMessages]::NoDestinationFolder -f $rootFolder)
+        $od = $pInfo.Provider
+        if (-not $od.SetOrCreateLocation($pInfo.Destination, $false)) {
+            log ([CopyGoProMessages]::NoDestinationFolder -f $pinfo.Destination)
             return
         }
 
@@ -251,11 +258,11 @@ class Main {
             $mm = $e.mm
             $dd = $e.dd
             log ([CopyGoProMessages]::CopyOD -f $e.Name, $e.GetFullPath())
-            $destdirpath = Join-Path $rootFolder $yyyy $mm
-            $parent = $od.SetOrCreateLocation($this.msal, $destdirpath, $true)
+            $destdirpath = Join-Path $pInfo.Destination $yyyy $mm
+            $parent = $od.SetOrCreateLocation($destdirpath, $true)
 
             <#--- Determine the full directory structure <root>/<yyyy>/<mm>/<yyyymmdd-remark> #>
-            $res = $od.GetChildItem($this.msal, $parent)
+            $res = $od.GetChildItem($parent)
             $dir = $res.value |? { $_.Name -match "$yyyy$mm$dd" } |Select -Last 1
             if ($dir) {
                 logv "Subfolder found: $($dir.Name) for $yyyy/$mm/$dd"
@@ -267,7 +274,9 @@ class Main {
                 }
                 log ([CopyGoProMessages]::SubFolderCreate -f $dirName,$parent.Name)
             }
-            $dir = $od.SetOrCreateLocation($this.msal, $dirName, $parent, $true)
+            $dir = $od.SetOrCreateLocation($dirName, $parent, $true)
+            #debug
+            log "FolderCreated: $($dir) Name=$($dir.Name), ID=$($dir.ID)"
             $destdirpath = Join-Path $destdirpath $dirName
 
             if ($this.fileExists($od, $dir, $e)) { continue }
@@ -278,11 +287,16 @@ class Main {
                 $e.CopyTo($folderObj)
             }
             log ([CopyGoProMessages]::Uploading -f $e.name,$e.filesize,$destdirpath)
-            $res = $od.UploadFile($this.msal, $destdirpath, $e.GetFullpath(), $e.filesize)
+            $res = $od.UploadFile($destdirpath, $e.GetFullpath(), $e.filesize)
+
+            #---debug
+            log "res=$res"
+            log "count=$($res.value)"
+            log "name=$($res.name) / $($res.value.name)"
 
             # rename when upload OK _and_ newName is set (e.g., directly uploaded from GoPro)
             if ($res -and $e.newName) {
-                $od.RenameItem($this.msal, $res, $e.newName)
+                $od.RenameItem($res, $e.newName)
             }
             if ($cachedir) {
                 Remove-Item $e.localfp -Verbose:1
@@ -292,7 +306,7 @@ class Main {
 
     [bool] fileExists($od, $dir, $file) {
         <#--- Fiding file, perhaps exists as alternate name?? ---#>
-        $files = ($od.GetChildItem($this.msal, $dir)).value
+        $files = ($od.GetChildItem($dir)).value
         if (-not $files) { return $false }
 
         $fileFound = $false
@@ -303,7 +317,7 @@ class Main {
                 } else {
                     log ([CopyGoProMessages]::FileExistsRename -f $al)
                     $fileObj = $files |? { $al -eq $_.Name } |Select -First 1
-                    $od.RenameItem($this.msal, $fileObj, $file.newName)
+                    $od.RenameItem($fileObj, $file.newName)
                 }
                 $fileFound = $true
             }
