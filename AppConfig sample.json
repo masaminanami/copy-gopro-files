@@ -1,0 +1,16 @@
+{
+    "GoProDevice": {
+        "DeviceType": "ポータブル デバイス",
+        "GoProDiskNameKeyword": "GoPro MTP .*"
+    },
+
+    "GoProDrive": {
+        "DeviceType": "USB ドライブ",
+        "GoProDiskNameKeyword": "USB ドライブ"
+    },
+
+    "AppClientId": "",
+    "AppClientIdForBusiness": "",
+    "TenantId": "",
+    "AppRedirectUri": "https://localhost"
+}
