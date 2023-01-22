@@ -32,15 +32,16 @@ class FileInfo {
     }
 
     set_nameinfo() {
-        $this.altNames = @()
+        $this.altNames = @($this.name)
         $this.newName = $null
         if ($this.name -match 'GX(\d\d)(\d\d\d\d)(\..*)') {
             $datestr = $this.date.ToString('yyyyMMdd-HHmm')
             $basename = "GX$($matches[2])-$($matches[1])$($matches[3])"
-            $this.altNames += $this.name
             $this.altNames += $basename
             $this.newName = "$($datestr).$basename"
             $this.altNames += $this.newName
+        } else {
+            $this.newName = $this.name
         }
     }
 }
