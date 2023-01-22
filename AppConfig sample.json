@@ -10,7 +10,9 @@
     },
 
     "AppClientId": "",
+    "AppRedirectUri": "https://localhost",
+
     "AppClientIdForBusiness": "",
     "TenantId": "",
-    "AppRedirectUri": "https://localhost"
+    "AppRedirectUriForBusiness": "https://localhost"
 }
