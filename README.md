@@ -46,7 +46,7 @@ PCに接続されている GoPro を検出し、MP4ファイルを _fileserver_ 
 > pwsh .\Copy-GoPro.ps1 -Name "HERO11 Black" -LocalDestination \\fileserver\Videos -OneDriveDestination Videos -date 4/5
 ```
 
-PCに接続されている HERO11 Back の MP4ファイルを _fileserver\\Videos_ フォルダと OneDrive 上の _ドキュメント\\Videos_ フォルダにコピーします。4/5以降に撮影された動画のみを処理します。
+PCに接続されている HERO11 Back の MP4ファイルを _\\\\fileserver\\Videos_ フォルダと OneDrive 上の _ドキュメント\\Videos_ フォルダにコピーします。4/5以降に撮影された動画のみを処理します。
 
 # コピー先フォルダ、ファイル名
 
@@ -68,7 +68,7 @@ GoProのファイルは GX\<サブシーケンス番号\>\<シーケンス番号
 
 動画ファイルをコピーするローカルフォルダを指定します。UNCパス形式（例 *\\\\fileserver\\folder*）を設定することも可能です。
 
-当然ながら OneDrive 同期クライアントが管理する ```c:\\users\\ユーザ\\OneDrive\\Pictured``` などと指定うることで OneDrive 同期クライアント経由でのコピーもできます。PCのディスク空き領域が十分な場合はこちらが安定し、かつ速いでしょう。
+当然ながら OneDrive 同期クライアントが管理する ```c:\users\ユーザ\OneDrive\Pictured``` などと指定うることで OneDrive 同期クライアント経由でのコピーもできます。PCのディスク空き領域が十分な場合はこちらが安定し、かつ速いでしょう。
 
 *folder-path* はカンマ(,)で区切って複数指定することも可。
 
